@@ -93,7 +93,11 @@ object AmyLexer extends Pipeline[List[File], Iterator[Token]] {
                                     "error".r |
                                     "_".r |
                                     "end".r
-  val keywordRule = Rule(regex = keywordRegex(), tag = "keyword", isSeparator = false, transformation = KeywordValueInjection.injection)
+  val keywordRule = Rule(
+    regex = keywordRegex(), 
+    tag = "keyword", 
+    isSeparator = false, 
+    transformation = KeywordValueInjection.injection)
 
   // Primitive type names,
   def primitivTypeRegex(): Regex[Char] = 
@@ -143,15 +147,30 @@ object AmyLexer extends Pipeline[List[File], Iterator[Token]] {
 )
   // String literal,
   // TODO
-  val stringLiteralRule = ???
+  val stringLiteralRule = Rule(
+    regex = '"'.r ~ (all - '"'.r - '\n'.r - '\r'.r).* ~ '"'.r,
+    tag = "stringLiteral",
+    isSeparator = false,
+    transformation = StringLiteralValueInjection.injection
+  )
   
   // Delimiters,
   // TODO
-  val delimiterRule = ???
+  val delimiterRule = Rule(
+    regex = '('.r | ')'.r | '{'.r | '}'.r | '['.r | ']'.r | ','.r | '.'.r | ':'.r | ';'.r | '='.r | "=>".r | ":=".r,
+    tag = "delimiter",
+    isSeparator = false,
+    transformation = DelimiterValueInjection.injection
+  )
 
   // Whitespaces,
   // TODO
-  val whitespaceRule = ???
+  val whitespaceRule = Rule(
+    regex = (' '.r | '\n'.r | '\t'.r | '\r'.r).+ , 
+    tag = "whitespace",
+    isSeparator = false,
+    transformation = WhitespaceValueInjection.injection
+  )
 
   // Single-line comments,
   // TODO
