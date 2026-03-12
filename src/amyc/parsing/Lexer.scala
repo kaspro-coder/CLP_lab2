@@ -97,29 +97,50 @@ object AmyLexer extends Pipeline[List[File], Iterator[Token]] {
 
   // Primitive type names,
   def primitivTypeRegex(): Regex[Char] = 
-    ???
-    // TODO
-  val primitiveTypeRule = 
-    ???
-    // TODO
+    "Int".r | "Boolean".r | "String".r | "Unit".r
+
+  val primitiveTypeRule = Rule(
+  regex = primitivTypeRegex(),
+  tag = "primitiveType",
+  isSeparator = false,
+  transformation = PrimitiveTypeValueInjection.injection
+)
   
   // Boolean literals,
-  // TODO
-  val booleanLiteralRule = ???
-
+  
+  val booleanLiteralRule = Rule(
+  regex = "true".r | "false".r,
+  tag = "booleanLiteral",
+  isSeparator = false,
+  transformation = BooleanLiteralValueInjection.injection
+)
 
   // Operators,
-  // TODO
-  val operatorRule = ???
+
+  val operatorRule = Rule(
+  regex = "++".r | "<=".r | "==".r | "!=".r | "&&".r | "||".r |
+          "+".r | "-".r | "*".r | "/".r | "%".r | "<".r | "!".r,
+  tag = "operator",
+  isSeparator = false,
+  transformation = OperatorValueInjection.injection
+)
 
   // Identifiers,
   // TODO
-  val identifierRule = ???
-  
+  val identifierRule = Rule(
+  regex = (azAZ | '_'.r) ~ (azAZ | digits | '_'.r).*,
+  tag = "identifier",
+  isSeparator = false,
+  transformation = IdentifierValueInjection.injection
+)
   // Integer literal,
   // TODO
-  val integerLiteralRule = ???
-
+  val integerLiteralRule =  Rule(
+  regex = digits.+,
+  tag = "integerLiteral",
+  isSeparator = false,
+  transformation = IntegerValueInjection.injection
+)
   // String literal,
   // TODO
   val stringLiteralRule = ???
@@ -177,9 +198,15 @@ object AmyLexer extends Pipeline[List[File], Iterator[Token]] {
             token.value match
                 case IdentifierValue(name) => Some(Tokens.IdentifierToken(name.mkString("")).setPos(pos))
         case _ if token.rule == integerLiteralRule =>
-            // Make sure to ensure that the integer literal fits in a 32-bit signed integer.
-            // TODO
-            ???
+        case _ if token.rule == integerLiteralRule =>
+        token.value match
+            case IntegerValue(digits) =>
+            val str = digits.mkString("")
+            val bigVal = BigInt(str)
+            if bigVal > Int.MaxValue || bigVal < Int.MinValue then
+                Some(Tokens.ErrorToken(s"Integer literal out of range: $str").setPos(pos))
+            else
+                Some(Tokens.IntLitToken(bigVal.toInt).setPos(pos))
         case _ if token.rule == stringLiteralRule =>
             token.value match
                 case StringLiteralValue(value) => 
