@@ -132,7 +132,7 @@ object AmyLexer extends Pipeline[List[File], Iterator[Token]] {
   // Identifiers,
   // TODO
   val identifierRule = Rule(
-  regex = (azAZ | '_'.r) ~ (azAZ | digits | '_'.r).*,
+  regex = azAZ ~ (azAZ | digits | '_'.r).*,
   tag = "identifier",
   isSeparator = false,
   transformation = IdentifierValueInjection.injection
@@ -148,7 +148,7 @@ object AmyLexer extends Pipeline[List[File], Iterator[Token]] {
   // String literal,
   // TODO
   val stringLiteralRule = Rule(
-    regex = '"'.r ~ (all - '"'.r - '\n'.r - '\r'.r).* ~ '"'.r,
+    regex = '"'.r ~ anyOf(allString.filter(c => c != '"' && c != '\n' && c != '\r')).* ~ '"'.r,
     tag = "stringLiteral",
     isSeparator = false,
     transformation = StringLiteralValueInjection.injection
@@ -174,20 +174,45 @@ object AmyLexer extends Pipeline[List[File], Iterator[Token]] {
 
   // Single-line comments,
   // TODO
-  val singleCommentRule = ???
+  val singleCommentRule = Rule(
+    regex = "//".r ~ anyOf(allString.filter(c => c != '\n' && c != '\r')).*, 
+    tag = "singleComment",
+    isSeparator = false,
+    transformation = CommentValueInjection.injection
+  )
  
   // Multi-line comments,
   // NOTE: Amy does not support nested multi-line comments (e.g. `/* foo /* bar */ */`).
   //       Make sure that unclosed multi-line comments result in an ErrorToken.
-  val multiCommentRule = ???
-  // TODO
+  val multiCommentRule = Rule(
+    regex = "/*".r ~ (anyOf(allString.filter(_ != '*')) | ('*'.r.+ ~ anyOf(allString.filter(c => c != '*' && c != '/')))).* ~ '*'.r.+ ~ "/".r,
+    tag = "multiComment",
+    isSeparator = false,
+    transformation = CommentValueInjection.injection
+  )
+
+  // Multi-line comments NON fermés (tout intégré également)
+  val unclosedMultiCommentRule = Rule(
+    regex = "/*".r ~ (anyOf(allString.filter(_ != '*')) | ('*'.r.+ ~ anyOf(allString.filter(c => c != '*' && c != '/')))).* ~ '*'.r.*,
+    tag = "unclosedMultiComment",
+    isSeparator = false,
+    transformation = CommentValueInjection.injection
+  )
 
 
   val rules = stainless.collection.List(
+      whitespaceRule,
+      singleCommentRule,
+      multiCommentRule,
+      unclosedMultiCommentRule,
       keywordRule,
       primitiveTypeRule,
-      ???
-      // TODO: Add all your rules here
+      booleanLiteralRule,
+      operatorRule,
+      delimiterRule,
+      identifierRule,
+      integerLiteralRule,
+      stringLiteralRule
   )
   /**
     * Converts a Ziplex token to an Amy token, filtering out whitespace and comments.
@@ -217,15 +242,14 @@ object AmyLexer extends Pipeline[List[File], Iterator[Token]] {
             token.value match
                 case IdentifierValue(name) => Some(Tokens.IdentifierToken(name.mkString("")).setPos(pos))
         case _ if token.rule == integerLiteralRule =>
-        case _ if token.rule == integerLiteralRule =>
-        token.value match
-            case IntegerValue(digits) =>
-            val str = digits.mkString("")
-            val bigVal = BigInt(str)
-            if bigVal > Int.MaxValue || bigVal < Int.MinValue then
-                Some(Tokens.ErrorToken(s"Integer literal out of range: $str").setPos(pos))
-            else
-                Some(Tokens.IntLitToken(bigVal.toInt).setPos(pos))
+            token.value match
+                case IntegerValue(digits) =>
+                    val str = digits.mkString("")
+                    val bigVal = BigInt(str)
+                    if bigVal > Int.MaxValue || bigVal < Int.MinValue then
+                        Some(Tokens.ErrorToken(s"Integer literal out of range: $str").setPos(pos))
+                    else
+                        Some(Tokens.IntLitToken(bigVal.toInt).setPos(pos))
         case _ if token.rule == stringLiteralRule =>
             token.value match
                 case StringLiteralValue(value) => 
@@ -237,8 +261,12 @@ object AmyLexer extends Pipeline[List[File], Iterator[Token]] {
                 case DelimiterValue(value) => Some(Tokens.DelimiterToken(value.mkString("")).setPos(pos))
         // TODO
         // Ignore whitespace and comments
-        case _ =>
+        case _ if token.rule == whitespaceRule || 
+                  token.rule == singleCommentRule || 
+                  token.rule == multiCommentRule =>
             None
+        case _ =>
+            Some(Tokens.ErrorToken("Unknown token").setPos(pos))
     end match
   end toAmyToken
 
